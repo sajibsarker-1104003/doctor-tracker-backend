@@ -1,0 +1,77 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+model User {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  name             String
+  email            String   @unique
+  passwordHash     String
+  role             Role     @default(USER)
+  refreshTokenHash String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("users")
+}
+
+model Doctor {
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  name           String
+  specialization String
+  hospital       String
+  phone          String
+  email          String    @unique
+  patients       Patient[]
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // list + date filter + pagination
+  @@index([createdAt(sort: Desc)])
+  // filters
+  @@index([specialization, createdAt(sort: Desc)])
+  @@index([hospital, createdAt(sort: Desc)])
+  // search (prefix match)
+  @@index([name])
+  @@map("doctors")
+}
+
+model Patient {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  age       Int
+  gender    Gender
+  phone     String
+  email     String?
+  condition String
+  notes     String?
+  doctorId  String   @db.ObjectId
+  doctor    Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // doctor's patient list (sorted/paginated) + patients-per-doctor aggregation
+  @@index([doctorId, createdAt(sort: Desc)])
+  // patients page: default list, date filter, condition filter
+  @@index([createdAt(sort: Desc)])
+  @@index([condition, createdAt(sort: Desc)])
+  // search (prefix match)
+  @@index([name])
+  @@map("patients")
+}
