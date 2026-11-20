@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query, Patch } from '@nestjs/common';
 import {
   ApiBearerAuth, ApiCreatedResponse, ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiTags,
 } from '@nestjs/swagger';
@@ -37,7 +37,6 @@ export class DoctorsController {
     return this.doctors.findAll(query);
   }
 
-  // :id route er age rakhte hobe
   @Get('filter-options')
   @ApiOperation({ summary: 'Distinct specializations and hospitals for filter dropdowns' })
   filterOptions() {
@@ -49,6 +48,25 @@ export class DoctorsController {
   @ApiOkResponse({ type: DoctorResponseDto })
   findOne(@Param('id', ParseObjectIdPipe) id: string) {
     return this.doctors.findOne(id);
+  }
+
+  // NEW: Update Doctor
+  @Patch(':id')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Update a doctor (ADMIN)' })
+  @ApiOkResponse({ type: DoctorResponseDto })
+  update(@Param('id', ParseObjectIdPipe) id: string, @Body() dto: Partial<CreateDoctorDto>) {
+    return this.doctors.update(id, dto);
+  }
+
+  // NEW: Delete Doctor
+  @Delete(':id')
+  @Roles(Role.ADMIN)
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Delete a doctor (ADMIN)' })
+  @ApiNoContentResponse({ description: 'Doctor deleted' })
+  async remove(@Param('id', ParseObjectIdPipe) id: string) {
+    await this.doctors.remove(id);
   }
 
   @Get(':id/patients')

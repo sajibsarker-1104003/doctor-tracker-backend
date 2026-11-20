@@ -23,6 +23,24 @@ export class DoctorsService {
     return toResponse(doctor);
   }
 
+  // NEW: Update Doctor
+  async update(id: string, dto: Partial<CreateDoctorDto>) {
+    await this.ensureExists(id);
+    const doctor = await this.prisma.doctor.update({
+      where: { id },
+      data: dto,
+      include: withCount,
+    });
+    return toResponse(doctor);
+  }
+
+  // NEW: Delete Doctor
+  async remove(id: string) {
+    await this.ensureExists(id);
+    // Prisma schema has onDelete: Cascade for patients, so this deletes the doctor and their patients safely.
+    await this.prisma.doctor.delete({ where: { id } });
+  }
+
   async findAll(q: QueryDoctorsDto) {
     const search = q.search;
     const where: Prisma.DoctorWhereInput = {
@@ -42,7 +60,6 @@ export class DoctorsService {
     const [items, total] = await Promise.all([
       this.prisma.doctor.findMany({
         where,
-        // id tie-breaker: pagination e duplicate/miss hoy na
         orderBy: [{ [q.sortBy]: q.sortOrder }, { id: q.sortOrder }],
         ...skipTake(q.page, q.limit),
         include: withCount,
@@ -53,7 +70,6 @@ export class DoctorsService {
     return { data: items.map(toResponse), meta: paginationMeta(total, q.page, q.limit) };
   }
 
-  /** Frontend filter dropdown er jonno distinct value gulo. */
   async filterOptions() {
     const [specs, hospitals] = await Promise.all([
       this.prisma.doctor.groupBy({ by: ['specialization'], orderBy: { specialization: 'asc' } }),
@@ -106,7 +122,6 @@ export class DoctorsService {
   }
 
   async removePatient(doctorId: string, patientId: string) {
-    // doctorId shoho filter: onno doctor er patient delete kora jabe na
     const { count } = await this.prisma.patient.deleteMany({
       where: { id: patientId, doctorId },
     });
