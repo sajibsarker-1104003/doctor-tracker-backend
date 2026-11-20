@@ -1,6 +1,7 @@
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import compression from 'compression';
 import helmet from 'helmet';
 import { AppModule } from './app.module.js';
@@ -9,8 +10,9 @@ import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter.
 import { setupSwagger } from './config/swagger.config.js';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const config = app.get(ConfigService);
+  const logger = new Logger('Bootstrap');
   const port = config.get<number>('PORT', 8080);
 
   const publicUrl =
@@ -19,6 +21,9 @@ async function bootstrap() {
     `http://localhost:${port}`;
 
   const swaggerEnabled = config.get<string>('SWAGGER_ENABLED', 'true') === 'true';
+
+  // Render sits behind a proxy: needed for secure cookies and correct client IPs
+  app.set('trust proxy', 1);
 
   // security + performance
   app.use(
@@ -30,20 +35,39 @@ async function bootstrap() {
           'img-src': ["'self'", 'data:', 'https:'],
         },
       },
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
     }),
     compression(),
   );
 
-  // CORS: one or more comma-separated origins, trailing slashes removed
-  const origins = (config.get<string>('CLIENT_URL') ?? '')
+  // CORS: comma-separated origins, trailing slashes removed
+  const allowedOrigins = (config.get<string>('CLIENT_URL') ?? '')
     .split(',')
     .map((o) => o.trim().replace(/\/$/, ''))
     .filter(Boolean);
 
+  // always allow local development
+  allowedOrigins.push('http://localhost:3000', 'http://127.0.0.1:3000');
+
   app.enableCors({
-    origin: origins.length ? origins : true,
+    origin: (origin, callback) => {
+      // no Origin header = curl, server-to-server, Render proxy: allow
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin.replace(/\/$/, ''))) {
+        return callback(null, true);
+      }
+
+      // never pass an Error here, it would turn into a 500
+      logger.warn(`CORS blocked origin: ${origin}`);
+      return callback(null, false);
+    },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    maxAge: 86400,
   });
+
   app.enableShutdownHooks();
 
   // routing
@@ -68,9 +92,10 @@ async function bootstrap() {
 
   // Render needs the server bound to all interfaces
   await app.listen(port, '0.0.0.0');
-  console.log(`API running at ${publicUrl}/api/v1`);
+  logger.log(`API running at ${publicUrl}/api/v1`);
+  logger.log(`Allowed CORS origins: ${allowedOrigins.join(', ')}`);
   if (swaggerEnabled) {
-    console.log(`Docs available at ${publicUrl}/api/docs`);
+    logger.log(`Docs available at ${publicUrl}/api/docs`);
   }
 }
 
