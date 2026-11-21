@@ -4,6 +4,7 @@ REST backend for a secure admin portal that manages doctors and their patients, 
 
 - Base URL: `http://localhost:8080/api/v1`
 - Swagger docs: `http://localhost:8080/api/docs` (OpenAPI JSON at `/api/docs-json`)
+- Live Swagger docs: `https://doctor-tracker-backend-45xc.onrender.com/api/docs#`
 
 ## Table of Contents
 
